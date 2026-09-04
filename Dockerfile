@@ -1,6 +1,6 @@
 # language: Dockerfile, file: Dockerfile
-# *pulls slim python, installs ffmpeg for yt-dlp muxing, starts uvicorn*
-FROM python:3.9-slim
+# *bumped to python 3.11-slim to satisfy new yt-dlp master branch requirements*
+FROM python:3.11-slim
 
 # Install ffmpeg for video/audio muxing
 RUN apt-get update && apt-get install -y ffmpeg
