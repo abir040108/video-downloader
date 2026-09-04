@@ -1,8 +1,9 @@
 # language: Python, file: main.py, target: FastAPI / Render
-# *updated to cobalt v7 api root endpoint and spoofed origin headers*
+# *hijacks commercial converter internal ajax api to offload downloading and muxing*
+import httpx
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-import httpx
 
 app = FastAPI()
 
@@ -13,13 +14,11 @@ async def serve_ui():
 
 @app.get("/api/info")
 async def get_info(url: str):
-    # Fetching basic metadata via official oembed
+    # Fast metadata via official oembed
     oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(oembed_url, timeout=10.0)
-            if resp.status_code != 200:
-                raise HTTPException(status_code=400, detail="Invalid YouTube link.")
             data = resp.json()
             return {
                 "title": data.get("title", "Unknown Video"), 
@@ -31,39 +30,38 @@ async def get_info(url: str):
 
 @app.get("/api/download")
 async def get_download_link(url: str, quality: str = "1080"):
-    # Cobalt V7 strict headers
+    # Spoofing the origin to bypass the target's CORS and basic bot protection
     headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Origin": "https://cobalt.tools",
-        "Referer": "https://cobalt.tools/"
+        "Origin": "https://en.loader.to",
+        "Referer": "https://en.loader.to/"
     }
-    
-    payload = {
-        "url": url,
-        "videoQuality": quality
-    }
-    
-    # Fallback instances if the primary is heavily rate-limited
-    instances = [
-        "https://api.cobalt.tools/",
-        "https://co.wuk.sh/"
-    ]
     
     async with httpx.AsyncClient() as client:
-        for engine in instances:
-            try:
-                resp = await client.post(engine, json=payload, headers=headers, timeout=20.0)
+        try:
+            # Step 1: Inject URL into their backend conversion queue
+            init_url = f"https://loader.to/ajax/download.php?format={quality}&url={url}"
+            init_resp = await client.get(init_url, headers=headers, timeout=15.0)
+            init_data = init_resp.json()
+            
+            task_id = init_data.get("id")
+            if not task_id:
+                raise HTTPException(status_code=400, detail="Hijack failed. Target API rejected payload.")
+            
+            # Step 2: Poll their internal status endpoint until the file is muxed and ready
+            progress_url = f"https://loader.to/ajax/progress.php?id={task_id}"
+            
+            for _ in range(40): # Poll for up to 80 seconds while their servers work
+                await asyncio.sleep(2)
+                prog_resp = await client.get(progress_url, headers=headers, timeout=10.0)
+                prog_data = prog_resp.json()
                 
-                if resp.status_code == 200:
-                    data = resp.json()
-                    # V7 returns status 'redirect' or 'tunnel' containing the url
-                    if data.get("status") in ["redirect", "tunnel"] and "url" in data:
-                        return {"url": data["url"]}
-                    elif data.get("status") == "error":
-                        continue # try the next instance
-            except Exception:
-                continue # silently try the next instance if connection drops
-                
-    raise HTTPException(status_code=500, detail="All extraction engines are currently blocked or overloaded.")
+                if prog_data.get("success") == 1 and prog_data.get("download_url"):
+                    return {"url": prog_data["download_url"]}
+                elif prog_data.get("text") and "Error" in prog_data.get("text"):
+                    raise HTTPException(status_code=400, detail="Target API encountered an error processing the video.")
+                    
+            raise HTTPException(status_code=408, detail="Timeout waiting for remote engine to finish.")
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
