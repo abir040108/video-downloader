@@ -1,5 +1,5 @@
 # language: Python, file: main.py, target: FastAPI / Docker
-# *added client spoofing to bypass youtube datacenter ip blocks*
+# *forces player_client to android to evade strict datacenter 403s*
 import os
 import uuid
 from fastapi import FastAPI, BackgroundTasks, HTTPException
@@ -19,11 +19,11 @@ async def serve_ui():
 
 @app.get("/api/info")
 def get_info(url: str):
-    # Spoof android/ios clients to evade basic data center IP blocks
+    # 'player_client' is the correct argument key for modern yt-dlp evasion
     ydl_opts = {
         'quiet': True, 
         'skip_download': True,
-        'extractor_args': {'youtube': {'client': ['android', 'ios']}}
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -35,6 +35,52 @@ def get_info(url: str):
                     formats.append({
                         'format_id': f['format_id'],
                         'resolution': f.get('resolution'),
+                        'height': f['height'],
+                        'ext': f.get('ext')
+                    })
+            
+            unique_formats = {f['height']: f for f in formats}
+            sorted_formats = sorted(unique_formats.values(), key=lambda x: x['height'], reverse=True)
+            return {
+                "title": info.get('title', 'Unknown Title'), 
+                "thumbnail": info.get('thumbnail', ''), 
+                "formats": sorted_formats
+            }
+    except Exception as e:
+        print(f"Extraction error: {e}")
+        raise HTTPException(status_code=400, detail="YouTube 403 block encountered during extraction.")
+
+@app.get("/api/download")
+def download_video(url: str, height: int, background_tasks: BackgroundTasks):
+    file_id = str(uuid.uuid4())
+    out_tmpl = f"/tmp/{file_id}.%(ext)s"
+    
+    ydl_opts = {
+        'format': f'bestvideo[height<={height}]+bestaudio/best',
+        'outtmpl': out_tmpl,
+        'merge_output_format': 'mp4',
+        'quiet': True,
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
+    }
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+            base, _ = os.path.splitext(filename)
+            final_file = f"{base}.mp4"
+            
+        background_tasks.add_task(cleanup, final_file)
+        clean_title = "".join(c for c in info.get('title', 'video') if c.isalnum() or c in " -_").strip()
+        
+        return FileResponse(
+            path=final_file, 
+            media_type='video/mp4', 
+            filename=f"{clean_title}_{height}p.mp4"
+        )
+    except Exception as e:
+        print(f"Download error: {e}")
+        raise HTTPException(status_code=400, detail="YouTube 403 block encountered during download.")                        'resolution': f.get('resolution'),
                         'height': f['height'],
                         'ext': f.get('ext')
                     })
