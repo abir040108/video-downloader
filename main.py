@@ -1,16 +1,10 @@
-# language: Python, file: main.py, target: FastAPI / Docker
-# *forces player_client to android to evade strict datacenter 403s*
-import os
-import uuid
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
-import yt_dlp
+# language: Python, file: main.py, target: FastAPI / Render
+# *offloads extraction to a public evasion engine to bypass datacenter ip bans*
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
+import httpx
 
 app = FastAPI()
-
-def cleanup(file_path: str):
-    if os.path.exists(file_path):
-        os.remove(file_path)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_ui():
@@ -18,112 +12,46 @@ async def serve_ui():
         return f.read()
 
 @app.get("/api/info")
-def get_info(url: str):
-    # 'player_client' is the correct argument key for modern yt-dlp evasion
-    ydl_opts = {
-        'quiet': True, 
-        'skip_download': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            formats = []
-            
-            for f in info.get('formats', []):
-                if f.get('vcodec') != 'none' and f.get('resolution') and f.get('height'):
-                    formats.append({
-                        'format_id': f['format_id'],
-                        'resolution': f.get('resolution'),
-                        'height': f['height'],
-                        'ext': f.get('ext')
-                    })
-            
-            unique_formats = {f['height']: f for f in formats}
-            sorted_formats = sorted(unique_formats.values(), key=lambda x: x['height'], reverse=True)
+async def get_info(url: str):
+    # Uses YouTube's official open oEmbed API to fetch metadata without triggering 403s
+    oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(oembed_url, timeout=10.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=400, detail="Invalid YouTube link.")
+            data = resp.json()
             return {
-                "title": info.get('title', 'Unknown Title'), 
-                "thumbnail": info.get('thumbnail', ''), 
-                "formats": sorted_formats
+                "title": data.get("title", "Unknown Video"), 
+                "thumbnail": data.get("thumbnail_url", ""), 
+                "formats": [1080, 720, 480, 360]
             }
-    except Exception as e:
-        print(f"Extraction error: {e}")
-        raise HTTPException(status_code=400, detail="YouTube 403 block encountered during extraction.")
+        except:
+            raise HTTPException(status_code=400, detail="Metadata extraction failed.")
 
 @app.get("/api/download")
-def download_video(url: str, height: int, background_tasks: BackgroundTasks):
-    file_id = str(uuid.uuid4())
-    out_tmpl = f"/tmp/{file_id}.%(ext)s"
-    
-    ydl_opts = {
-        'format': f'bestvideo[height<={height}]+bestaudio/best',
-        'outtmpl': out_tmpl,
-        'merge_output_format': 'mp4',
-        'quiet': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
+async def get_download_link(url: str, quality: str = "1080"):
+    # Payload for the upstream proxy engine
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    payload = {
+        "url": url,
+        "videoQuality": quality,
+        "filenamePattern": "classic"
     }
     
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            base, _ = os.path.splitext(filename)
-            final_file = f"{base}.mp4"
+    async with httpx.AsyncClient() as client:
+        try:
+            # Hitting an open evasion instance
+            resp = await client.post("https://api.cobalt.tools/api/json", json=payload, headers=headers, timeout=20.0)
+            data = resp.json()
             
-        background_tasks.add_task(cleanup, final_file)
-        clean_title = "".join(c for c in info.get('title', 'video') if c.isalnum() or c in " -_").strip()
-        
-        return FileResponse(
-            path=final_file, 
-            media_type='video/mp4', 
-            filename=f"{clean_title}_{height}p.mp4"
-        )
-    except Exception as e:
-        print(f"Download error: {e}")
-        raise HTTPException(status_code=400, detail="YouTube 403 block encountered during download.")                        'resolution': f.get('resolution'),
-                        'height': f['height'],
-                        'ext': f.get('ext')
-                    })
-            
-            unique_formats = {f['height']: f for f in formats}
-            sorted_formats = sorted(unique_formats.values(), key=lambda x: x['height'], reverse=True)
-            return {
-                "title": info.get('title', 'Unknown Title'), 
-                "thumbnail": info.get('thumbnail', ''), 
-                "formats": sorted_formats
-            }
-    except Exception as e:
-        print(f"Extraction error: {e}")
-        raise HTTPException(status_code=400, detail="YouTube blocked the extraction request.")
-
-@app.get("/api/download")
-def download_video(url: str, height: int, background_tasks: BackgroundTasks):
-    file_id = str(uuid.uuid4())
-    out_tmpl = f"/tmp/{file_id}.%(ext)s"
-    
-    ydl_opts = {
-        'format': f'bestvideo[height<={height}]+bestaudio/best',
-        'outtmpl': out_tmpl,
-        'merge_output_format': 'mp4',
-        'quiet': True,
-        'extractor_args': {'youtube': {'client': ['android', 'ios']}}
-    }
-    
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            base, _ = os.path.splitext(filename)
-            final_file = f"{base}.mp4"
-            
-        background_tasks.add_task(cleanup, final_file)
-        clean_title = "".join(c for c in info.get('title', 'video') if c.isalnum() or c in " -_").strip()
-        
-        return FileResponse(
-            path=final_file, 
-            media_type='video/mp4', 
-            filename=f"{clean_title}_{height}p.mp4"
-        )
-    except Exception as e:
-        print(f"Download error: {e}")
-        raise HTTPException(status_code=400, detail="YouTube blocked the download request.")
+            if "url" in data:
+                return {"url": data["url"]}
+            else:
+                raise HTTPException(status_code=400, detail="Upstream engine failed to extract direct link.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Upstream engine offline or blocked.")
