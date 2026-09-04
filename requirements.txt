@@ -1,5 +1,4 @@
 # language: text, file: requirements.txt
-# *stripped yt-dlp, added httpx for async upstream routing*
 fastapi
 uvicorn
-httpx
+yt-dlp
