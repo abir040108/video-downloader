@@ -6,68 +6,42 @@
     <meta name="viewport" content="width=device-width, initial-width=1.0">
     <title>Video Downloader</title>
     <style>
-        :root {
-            --bg: #0f0f11; --surface: #1a1a1e; --primary: #4f46e5;
-            --text: #e2e8f0; --muted: #94a3b8;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg); color: var(--text);
-            display: flex; flex-direction: column; align-items: center;
-            min-height: 100vh; margin: 0; padding: 2rem; box-sizing: border-box;
-        }
-        .container {
-            background: var(--surface); padding: 2rem; border-radius: 12px;
-            width: 100%; max-width: 600px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            margin-top: 5vh;
-        }
+        :root { --bg: #0f0f11; --surface: #1a1a1e; --primary: #4f46e5; --text: #e2e8f0; --muted: #94a3b8; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 2rem; box-sizing: border-box; }
+        .container { background: var(--surface); padding: 2rem; border-radius: 12px; width: 100%; max-width: 600px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-top: 5vh; }
         h1 { margin-top: 0; font-size: 1.5rem; text-align: center; }
         .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
-        input {
-            flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #333;
-            background: #000; color: #fff; font-size: 1rem;
-        }
+        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #333; background: #000; color: #fff; font-size: 1rem; }
         input:focus { outline: 1px solid var(--primary); }
-        button {
-            padding: 12px 24px; border-radius: 6px; border: none;
-            background: var(--primary); color: white; font-weight: 600;
-            cursor: pointer; transition: opacity 0.2s;
-        }
+        button { padding: 12px 24px; border-radius: 6px; border: none; background: var(--primary); color: white; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
         button:hover { opacity: 0.9; }
         button:disabled { background: #333; cursor: not-allowed; color: var(--muted); }
-        
         #result { display: none; margin-top: 20px; text-align: center; }
         img.thumbnail { width: 100%; border-radius: 8px; margin-bottom: 15px; background: #000; }
-        .formats { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; }
-        .format-btn { background: #25252b; border: 1px solid #333; width: 45%; }
+        .formats { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .format-btn { background: #25252b; border: 1px solid #333; width: 100%; text-align: left; padding: 15px; display: flex; justify-content: space-between; }
         .format-btn:hover { background: #333; border-color: var(--primary); }
-        
+        .size-badge { color: var(--muted); font-size: 0.9rem; }
         .footer { margin-top: auto; padding-top: 40px; color: var(--muted); font-size: 0.9rem; }
         .dev-credit { color: var(--primary); font-weight: bold; }
         .loader { display: none; text-align: center; margin: 20px 0; color: var(--primary); font-weight: 500; }
     </style>
 </head>
 <body>
-
     <div class="container">
         <h1>Video Downloader</h1>
         <div class="input-group">
             <input type="text" id="urlInput" placeholder="Paste video link here..." autocomplete="off">
             <button id="fetchBtn" onclick="fetchInfo()">Extract</button>
         </div>
-
-        <div id="loading" class="loader">Fetching video data...</div>
-
+        <div id="loading" class="loader">Fetching metadata & sizes...</div>
         <div id="result">
-            <img id="thumb" class="thumbnail" src="" alt="Video Thumbnail">
+            <img id="thumb" class="thumbnail" src="" alt="Thumbnail">
             <h3 id="videoTitle"></h3>
             <div id="formatsList" class="formats"></div>
         </div>
     </div>
-
-    <div class="footer">
-        Developed by <span class="dev-credit">abir</span>
-    </div>
+    <div class="footer">Developed by <span class="dev-credit">abir</span></div>
 
     <script>
         let currentUrl = "";
@@ -84,7 +58,6 @@
             try {
                 const res = await fetch(`/api/info?url=${encodeURIComponent(url)}`);
                 const data = await res.json();
-
                 if(!data.title) throw new Error("Invalid response");
 
                 document.getElementById('thumb').src = data.thumbnail;
@@ -93,28 +66,40 @@
                 const formatContainer = document.getElementById('formatsList');
                 formatContainer.innerHTML = '';
 
-                data.formats.forEach(h => {
+                data.formats.forEach(f => {
                     const btn = document.createElement('button');
                     btn.className = 'format-btn';
-                    btn.textContent = `Download ${h}p`;
+                    
+                    // Added size display inside the button
+                    btn.innerHTML = `<span>Download ${f.height}p</span> <span class="size-badge">${f.size}</span>`;
                     
                     btn.onclick = async () => {
-                        const originalText = btn.textContent;
-                        btn.textContent = 'Processing...';
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<span>Processing on remote server (~60s)...</span>';
                         btn.style.opacity = '0.7';
                         btn.disabled = true;
+                        
                         try {
-                            const dlRes = await fetch(`/api/download?url=${encodeURIComponent(currentUrl)}&quality=${h}`);
+                            const dlRes = await fetch(`/api/download?url=${encodeURIComponent(currentUrl)}&quality=${f.height}`);
                             const dlData = await dlRes.json();
+                            
                             if(dlData.url) {
-                                window.location.href = dlData.url;
+                                // Silent anchor injection to force the browser's download manager
+                                const a = document.createElement('a');
+                                a.href = dlData.url;
+                                a.setAttribute('download', '');
+                                a.target = '_blank';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
                             } else {
-                                alert("Link generation failed. Engine might be overloaded.");
+                                alert("Link generation failed.");
                             }
                         } catch(err) {
-                            alert("Network error connecting to the extraction engine.");
+                            alert("Network error. The file might be too large or the engine dropped it.");
                         }
-                        btn.textContent = originalText;
+                        
+                        btn.innerHTML = originalHTML;
                         btn.style.opacity = '1';
                         btn.disabled = false;
                     };
@@ -123,7 +108,7 @@
 
                 document.getElementById('result').style.display = 'block';
             } catch(e) {
-                alert("Extraction failed. Ensure the link is valid and public.");
+                alert("Extraction failed. Ensure link is public.");
             } finally {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('fetchBtn').disabled = false;
