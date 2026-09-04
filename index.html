@@ -70,6 +70,59 @@
                     const btn = document.createElement('button');
                     btn.className = 'format-btn';
                     
+                    btn.innerHTML = `<span>Download ${f.height}p</span> <span class="size-badge">${f.size}</span>`;
+                    
+                    btn.onclick = async () => {
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<span>Hunting for available node...</span>';
+                        btn.style.opacity = '0.7';
+                        btn.disabled = true;
+                        
+                        try {
+                            const dlRes = await fetch(`/api/download?url=${encodeURIComponent(currentUrl)}&quality=${f.height}`);
+                            const dlData = await dlRes.json();
+                            
+                            if(dlData.url) {
+                                const a = document.createElement('a');
+                                a.href = dlData.url;
+                                a.setAttribute('download', '');
+                                a.target = '_blank';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                            } else {
+                                alert("Extraction failed. All nodes rejected the payload.");
+                            }
+                        } catch(err) {
+                            alert("Network error. The public nodes might be temporarily hard-banned by YouTube.");
+                        }
+                        
+                        btn.innerHTML = originalHTML;
+                        btn.style.opacity = '1';
+                        btn.disabled = false;
+                    };
+                    formatContainer.appendChild(btn);
+                });
+
+                document.getElementById('result').style.display = 'block';
+            } catch(e) {
+                alert("Extraction failed. Ensure link is public.");
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('fetchBtn').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>                document.getElementById('videoTitle').textContent = data.title;
+                
+                const formatContainer = document.getElementById('formatsList');
+                formatContainer.innerHTML = '';
+
+                data.formats.forEach(f => {
+                    const btn = document.createElement('button');
+                    btn.className = 'format-btn';
+                    
                     // Added size display inside the button
                     btn.innerHTML = `<span>Download ${f.height}p</span> <span class="size-badge">${f.size}</span>`;
                     
