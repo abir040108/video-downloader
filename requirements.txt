@@ -1,5 +1,5 @@
-# language: text, file: requirements.txt, target: GitHub
-# *pulls the absolute latest master commit to bypass stale 403 signatures*
+# language: text, file: requirements.txt
+# *stripped yt-dlp, added httpx for async upstream routing*
 fastapi
 uvicorn
-https://github.com/yt-dlp/yt-dlp/archive/master.zip
+httpx
