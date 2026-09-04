@@ -1,16 +1,11 @@
 # language: Python, file: main.py, target: FastAPI / Render
-# *direct extraction and metadata parsing route*
-import os
-import uuid
-import yt_dlp
-from fastapi import FastAPI, BackgroundTasks, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse
+# *restored commercial converter api hijack and polling logic*
+import httpx
+import asyncio
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 app = FastAPI()
-
-def cleanup(file_path: str):
-    if os.path.exists(file_path):
-        os.remove(file_path)
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_ui():
@@ -19,62 +14,49 @@ async def serve_ui():
 
 @app.get("/api/info")
 async def get_info(url: str):
-    ydl_opts = {
-        'quiet': True, 
-        'skip_download': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
-    }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            formats = []
-            
-            for f in info.get('formats', []):
-                if f.get('vcodec') != 'none' and f.get('height'):
-                    h = f['height']
-                    filesize = f.get('filesize') or f.get('filesize_approx')
-                    size_str = f"~{filesize / (1024*1024):.1f} MB" if filesize else "Available"
-                    formats.append({'height': h, 'size': size_str})
-            
-            # Deduplicate resolutions
-            unique = {x['height']: x for x in formats}
-            sorted_formats = sorted(unique.values(), key=lambda x: x['height'], reverse=True)
-            
+    oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(oembed_url, timeout=10.0)
+            data = resp.json()
             return {
-                "title": info.get('title', 'Unknown Title'),
-                "thumbnail": info.get('thumbnail', ''),
-                "formats": sorted_formats
+                "title": data.get("title", "Unknown Video"), 
+                "thumbnail": data.get("thumbnail_url", ""), 
+                "formats": [1080, 720, 480, 360]
             }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        except:
+            raise HTTPException(status_code=400, detail="Metadata extraction failed.")
 
 @app.get("/api/download")
-async def download_video(url: str, height: int, background_tasks: BackgroundTasks):
-    file_id = str(uuid.uuid4())
-    out_tmpl = f"/tmp/{file_id}.%(ext)s"
-    
-    ydl_opts = {
-        'format': f'bestvideo[height<={height}]+bestaudio/best',
-        'outtmpl': out_tmpl,
-        'merge_output_format': 'mp4',
-        'quiet': True,
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
+async def get_download_link(url: str, quality: str = "1080"):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Origin": "https://en.loader.to",
+        "Referer": "https://en.loader.to/"
     }
     
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-            base, _ = os.path.splitext(filename)
-            final_file = f"{base}.mp4"
+    async with httpx.AsyncClient() as client:
+        try:
+            init_url = f"https://loader.to/ajax/download.php?format={quality}&url={url}"
+            init_resp = await client.get(init_url, headers=headers, timeout=15.0)
+            init_data = init_resp.json()
             
-        background_tasks.add_task(cleanup, final_file)
-        clean_title = "".join(c for c in info.get('title', 'video') if c.isalnum() or c in " -_").strip()
-        
-        return FileResponse(
-            path=final_file, 
-            media_type='video/mp4', 
-            filename=f"{clean_title}_{height}p.mp4"
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            task_id = init_data.get("id")
+            if not task_id:
+                raise HTTPException(status_code=400, detail="Target API rejected payload.")
+            
+            progress_url = f"https://loader.to/ajax/progress.php?id={task_id}"
+            
+            for _ in range(40):
+                await asyncio.sleep(2)
+                prog_resp = await client.get(progress_url, headers=headers, timeout=10.0)
+                prog_data = prog_resp.json()
+                
+                if prog_data.get("success") == 1 and prog_data.get("download_url"):
+                    return {"url": prog_data["download_url"]}
+                elif prog_data.get("text") and "Error" in prog_data.get("text"):
+                    raise HTTPException(status_code=400, detail="Target encountered an error.")
+                    
+            raise HTTPException(status_code=408, detail="Timeout waiting for engine.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
