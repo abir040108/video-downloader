@@ -1,90 +1,240 @@
 <!-- language: HTML, file: index.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Downloader</title>
+    <title>প্রিমিয়াম ভিডিও ডাউনলোডার</title>
+    <!-- Importing Bengali Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0f0f11;
-            --surface: #1a1a1e;
-            --primary: #4f46e5;
-            --text: #e2e8f0;
-            --muted: #94a3b8;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --text-main: #f8fafc;
+            --text-muted: #cbd5e1;
         }
+
+        /* Animated Gradient Background */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            font-family: 'Hind Siliguri', sans-serif;
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 2rem;
+            color: var(--text-main);
+            background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #0f172a);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
             box-sizing: border-box;
         }
-        .container {
-            background: var(--surface);
-            padding: 2rem;
-            border-radius: 12px;
-            width: 100%;
-            max-width: 600px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            margin-top: 5vh;
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
         }
-        h1 { margin-top: 0; font-size: 1.5rem; text-align: center; }
-        .input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 550px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            margin-top: 4vh;
+            transition: transform 0.3s ease;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 2rem;
+            text-align: center;
+            font-weight: 700;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
         input {
             flex: 1;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #333;
-            background: #000;
+            padding: 14px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
             color: #fff;
             font-size: 1rem;
+            font-family: inherit;
+            transition: all 0.3s ease;
         }
-        input:focus { outline: 1px solid var(--primary); }
-        button {
-            padding: 12px 24px;
-            border-radius: 6px;
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        button.main-btn {
+            padding: 0 28px;
+            border-radius: 12px;
             border: none;
-            background: var(--primary);
+            background: linear-gradient(135deg, var(--primary), #8b5cf6);
             color: white;
             font-weight: 600;
+            font-size: 1.1rem;
+            font-family: inherit;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
         }
-        button:hover { opacity: 0.9; }
-        button:disabled { background: #333; cursor: not-allowed; color: var(--muted); }
+
+        button.main-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Result Area Animations */
+        #result {
+            display: none;
+            margin-top: 25px;
+            text-align: center;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        img.thumbnail {
+            width: 100%;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h3 {
+            font-weight: 600;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            color: var(--text-main);
+        }
+
+        .formats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .format-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 14px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .format-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        /* Loading Spinner */
+        .loader-container {
+            display: none;
+            text-align: center;
+            margin: 30px 0;
+        }
         
-        #result { display: none; margin-top: 20px; text-align: center; }
-        img.thumbnail { width: 100%; border-radius: 8px; margin-bottom: 15px; background: #000; }
-        .formats { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; }
-        .format-btn { background: #25252b; border: 1px solid #333; }
-        .format-btn:hover { background: #333; border-color: var(--primary); }
-        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 15px auto;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loader-text {
+            color: var(--text-muted);
+            font-weight: 600;
+            animation: pulse 1.5s ease infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Footer */
         .footer {
             margin-top: auto;
             padding-top: 40px;
-            color: var(--muted);
-            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-size: 1rem;
         }
-        .dev-credit { color: var(--primary); font-weight: bold; }
-        .loader { display: none; text-align: center; margin: 20px 0; color: var(--primary); font-weight: 500; }
+        
+        .dev-credit {
+            color: #c084fc;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 480px) {
+            .input-group { flex-direction: column; }
+            button.main-btn { padding: 14px; }
+            .formats { grid-template-columns: 1fr; }
+            .glass-panel { padding: 1.5rem; }
+        }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Video Downloader</h1>
+    <div class="glass-panel">
+        <h1>ভিডিও ডাউনলোডার</h1>
         <div class="input-group">
-            <input type="text" id="urlInput" placeholder="Paste video link here..." autocomplete="off">
-            <button id="fetchBtn" onclick="fetchInfo()">Extract</button>
+            <input type="text" id="urlInput" placeholder="এখানে ভিডিও লিংক পেস্ট করুন..." autocomplete="off">
+            <button id="fetchBtn" class="main-btn" onclick="fetchInfo()">খুঁজুন</button>
         </div>
 
-        <div id="loading" class="loader">Fetching video data...</div>
+        <div id="loading" class="loader-container">
+            <div class="spinner"></div>
+            <div class="loader-text">ভিডিওর তথ্য সংগ্রহ করা হচ্ছে...</div>
+        </div>
 
         <div id="result">
             <img id="thumb" class="thumbnail" src="" alt="Video Thumbnail">
@@ -94,12 +244,11 @@
     </div>
 
     <div class="footer">
-        Developed by <span class="dev-credit">abir</span>
+        ডেভেলপ করেছেন <span class="dev-credit">Ashikul Islam Abir</span>
     </div>
 
     <script>
         let currentUrl = "";
-        const targetHeights = [1080, 720, 480, 360];
 
         async function fetchInfo() {
             const url = document.getElementById('urlInput').value.trim();
@@ -125,24 +274,27 @@
                 data.formats.forEach(h => {
                     const btn = document.createElement('button');
                     btn.className = 'format-btn';
-                    btn.textContent = `Download ${h}p`;
+                    btn.textContent = `${h}p ডাউনলোড`;
                     
                     btn.onclick = async () => {
                         const originalText = btn.textContent;
-                        btn.textContent = 'Processing...';
+                        btn.textContent = 'প্রসেস হচ্ছে (~60s)...';
                         btn.style.opacity = '0.7';
                         btn.disabled = true;
+                        
                         try {
                             const dlRes = await fetch(`/api/download?url=${encodeURIComponent(currentUrl)}&quality=${h}`);
                             const dlData = await dlRes.json();
+                            
                             if(dlData.url) {
                                 window.location.href = dlData.url;
                             } else {
-                                alert("Link generation failed. Engine might be overloaded.");
+                                alert("লিংক তৈরি করতে ব্যর্থ। সার্ভারে অতিরিক্ত চাপ থাকতে পারে।");
                             }
                         } catch(err) {
-                            alert("Network error connecting to the extraction engine.");
+                            alert("সার্ভারের সাথে কানেক্ট করতে নেটওয়ার্ক সমস্যা হচ্ছে।");
                         }
+                        
                         btn.textContent = originalText;
                         btn.style.opacity = '1';
                         btn.disabled = false;
@@ -152,7 +304,7 @@
 
                 document.getElementById('result').style.display = 'block';
             } catch(e) {
-                alert("Extraction failed. Ensure the link is valid and public.");
+                alert("ভিডিওটি এক্সট্র্যাক্ট করা যায়নি। লিংকটি সঠিক এবং পাবলিক কি না তা নিশ্চিত করুন।");
             } finally {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('fetchBtn').disabled = false;
