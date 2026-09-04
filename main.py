@@ -1,7 +1,6 @@
 # language: Python, file: main.py, target: FastAPI / Render
-# *added invidious api hijacking to pre-calculate file sizes via bitrate*
+# *dynamically hunts through live community nodes to bypass overloading*
 import httpx
-import asyncio
 import re
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -41,16 +40,12 @@ async def get_info(url: str):
                     streams = data.get("adaptiveFormats", []) + data.get("formatStreams", [])
                     
                     for h in target_heights:
-                        # Find the video stream to calculate size
                         stream = next((s for s in streams if s.get("resolution") == f"{h}p" or s.get("qualityLabel") == f"{h}p"), None)
-                        size_str = "Size varies"
-                        
+                        size_str = "Est. Dynamically"
                         if stream and stream.get("bitrate") and data.get("lengthSeconds"):
-                            # Bitrate (bits/sec) * Duration (sec) / 8 = Bytes
                             bytes_size = (int(stream["bitrate"]) * int(data["lengthSeconds"])) / 8
                             mb_size = bytes_size / (1024 * 1024)
                             size_str = f"~{mb_size:.1f} MB"
-                            
                         formats.append({"height": h, "size": size_str})
                         
                     return {
@@ -61,7 +56,7 @@ async def get_info(url: str):
             except Exception:
                 continue
                 
-        # Fallback if all Invidious instances are dead
+        # Fallback if Invidious is blocked
         try:
             oembed = await client.get(f"https://www.youtube.com/oembed?url={url}&format=json")
             odata = oembed.json()
@@ -75,34 +70,53 @@ async def get_info(url: str):
 
 @app.get("/api/download")
 async def get_download_link(url: str, quality: str = "1080"):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Origin": "https://en.loader.to",
-        "Referer": "https://en.loader.to/"
+    payload = {
+        "url": url,
+        "videoQuality": quality,
+        "filenamePattern": "classic"
     }
     
+    # Base fallback nodes if the registry goes down
+    nodes = [
+        "https://co.wuk.sh",
+        "https://cobalt.q0.o.u00z.com",
+        "https://cobalt.canine.ly",
+        "https://cobalt.owo.vc"
+    ]
+    
     async with httpx.AsyncClient() as client:
+        # 1. Fetch live community nodes from the global registry
         try:
-            init_url = f"https://loader.to/ajax/download.php?format={quality}&url={url}"
-            init_resp = await client.get(init_url, headers=headers, timeout=15.0)
-            init_data = init_resp.json()
+            registry = await client.get("https://instances.cobalt.wiki/instances.json", timeout=5.0)
+            if registry.status_code == 200:
+                data = registry.json()
+                # Filter for instances that are flagged as online
+                live_nodes = [f"https://{n['domain']}" for n in data if n.get("up", True) and n.get("api_online", True)]
+                if live_nodes:
+                    nodes = live_nodes + nodes
+        except Exception:
+            pass 
             
-            task_id = init_data.get("id")
-            if not task_id:
-                raise HTTPException(status_code=400, detail="Target API rejected payload.")
-            
-            progress_url = f"https://loader.to/ajax/progress.php?id={task_id}"
-            
-            for _ in range(40):
-                await asyncio.sleep(2)
-                prog_resp = await client.get(progress_url, headers=headers, timeout=10.0)
-                prog_data = prog_resp.json()
+        # Deduplicate while preserving order
+        seen = set()
+        unique_nodes = [x for x in nodes if not (x in seen or seen.add(x))]
+        
+        # 2. Fire the payload at community nodes until one accepts it
+        for engine in unique_nodes[:15]: # Cap at 15 attempts to prevent endless hanging
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            }
+            try:
+                # Cobalt V7 accepts POST directly to the root endpoint
+                resp = await client.post(engine, json=payload, headers=headers, timeout=12.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    # A successful extraction returns a direct URL or tunnel stream
+                    if data.get("status") in ["redirect", "tunnel", "stream"] and "url" in data:
+                        return {"url": data["url"]}
+            except Exception:
+                continue # Node is dead or blocked by Cloudflare. Silently move to the next.
                 
-                if prog_data.get("success") == 1 and prog_data.get("download_url"):
-                    return {"url": prog_data["download_url"]}
-                elif prog_data.get("text") and "Error" in prog_data.get("text"):
-                    raise HTTPException(status_code=400, detail="Target encountered an error.")
-                    
-            raise HTTPException(status_code=408, detail="Timeout waiting for engine.")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=500, detail="All community extraction nodes are currently overloaded.")
