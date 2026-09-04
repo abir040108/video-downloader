@@ -1,0 +1,4 @@
+# language: text, file: requirements.txt
+fastapi
+uvicorn
+yt-dlp
